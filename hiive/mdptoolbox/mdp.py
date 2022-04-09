@@ -1261,10 +1261,6 @@ class QLearning(MDP):
         }
         return run_stat
 
-
-
-
-
 class QLearningMod(MDP):
     """A discounted MDP solved using the Q learning algorithm.
 
@@ -1340,19 +1336,23 @@ class QLearningMod(MDP):
     def __init__(self, transitions, reward, gamma,
                  alpha=0.1, alpha_decay=0.99, alpha_min=0.001,
                  epsilon=1.0, epsilon_min=0.1, epsilon_decay=0.99,
-                 n_iter=10000, skip_check=False, iter_callback=None,
-                 run_stat_frequency=None, env = None, total_episodes = None):
+                 skip_check=False, iter_callback=None,
+                 run_stat_frequency=None, env = None, total_episodes = None, render = False):
         # Initialise a Q-learning MDP.
 
         # The following check won't be done in MDP()'s initialisation, so let's
         # do it here
-        self.max_iter = int(n_iter)
-        assert self.max_iter >= 10000, "'n_iter' should be greater than 10000."
 
+        # Ensuring we've set an environment
+
+        assert env != None
+    
         if not skip_check:
             # We don't want to send this to MDP because _computePR should not
             #  be run on it, so check that it defines an MDP
             _util.check(transitions, reward)
+
+
 
         # Store P, S, and A
         self.S, self.A = _computeDimensions(transitions)
@@ -1382,9 +1382,7 @@ class QLearningMod(MDP):
         self.run_stat_frequency = max(1, self.max_iter // 10000) if run_stat_frequency is None else run_stat_frequency
         self.env = env
         self.total_episodes = total_episodes
-
-
-        self.total_reward_earned = 0
+        self.render = render
 
     def run(self):
 
@@ -1404,32 +1402,25 @@ class QLearningMod(MDP):
         s = _np.random.randint(0, self.S)
         reset_s = False
         run_stats = []
-        # for n in range(1, self.max_iter + 1):
 
+        episode_stats = []
 
-        for ep in range(0, self.total_episodes):
+        epsilon = self.epsilon
+        alpha = self.alpha
+        for episode_num in range(0, self.total_episodes):
+
             # Resetting variables per episode
             self.env.reset()
-            epsilon = self.epsilon
-            alpha = self.alpha
-            n = 0
-
-            done_ = False
-            while not done_: 
-                take_run_stat = n % self.run_stat_frequency == 0 or n == self.max_iter
-
-                # Reinitialisation of trajectories every 100 transitions
-                # if (self.iter_callback is None and (n % 100) == 0) or reset_s:
-                #     s = _np.random.randint(0, self.S)
-
+            curr_itr = 0
+            done = False
+            start_time = _time.time()
+            while not done: 
                 # Action choice : greedy with increasing probability
                 # The agent takes random actions for probability ε and greedy action for probability (1-ε).
                 pn = _np.random.random()
                 if pn < epsilon:
                     a = _np.random.randint(0, self.A)
                 else:
-                    # optimal_action = self.Q[s, :].max()
-
                     # Checking if al values are the same, we just picka random one
                     same = _np.all(self.Q[s] == self.Q[s][0])
                     if same:
@@ -1437,38 +1428,18 @@ class QLearningMod(MDP):
                     else:
                         a = self.Q[s, :].argmax()
 
-                print(epsilon)
-
-                # take actions
-                print(f"Action: {a}")
-                new_state, reward_, done_, info = self.env.step(a)
-                print(f"Done {done_} - {info}")
-
-                print(f"Iter# {n}")
-                print(self.env.render('ansi'))
-                print()
-
+                new_state, reward, done, info = self.env.step(a)
                 s_new = new_state
-                r = reward_
-                # Simulating next state s_new and reward associated to <s,s_new,a>
-                # p_s_new = _np.random.random()
-                # p = 0
-                # s_new = -1
-                # while (p < p_s_new) and (s_new < (self.S - 1)):
-                #     s_new = s_new + 1
-                #     p = p + self.P[a][s, s_new]
 
-                # try:
-                #     r = self.R[a][s, s_new]
-                # except IndexError:
-                #     try:
-                #         r = self.R[s, a]
-                #     except IndexError:
-                #         r = self.R[s]
+                # Rendering 
+                if self.render:
+                    print(f"Episode: {episode_num} | Iteration: {curr_itr}")
+                    print(self.env.render('ansi'))
+                    print()
 
                 # Q[s, a] = Q[s, a] + alpha*(R + gamma*Max[Q(s’, A)] - Q[s, a])
                 # Updating the value of Q
-                dQ = alpha * (r + self.gamma * self.Q[s_new, :].max() - self.Q[s, a])
+                dQ = alpha * (reward + self.gamma * self.Q[s_new, :].max() - self.Q[s, a])
                 self.Q[s, a] = self.Q[s, a] + dQ
 
                 # Computing means all over maximal Q variations values
@@ -1481,36 +1452,37 @@ class QLearningMod(MDP):
                 self.policy = p
 
                 self.S_freq[s,a] += 1
-                run_stats.append(self._build_run_stat(i=n, s=s, a=a, r=r, p=p, v=v, error=error))
+                run_stats.append(self._build_run_stat(i=curr_itr, s=s, a=a, r=reward, p=p, v=v, error=error))
 
-                if take_run_stat:
-                    error_cumulative.append(error)
+                # if take_run_stat:
+                #     error_cumulative.append(error)
 
-                    if len(error_cumulative) == 100:
-                        self.error_mean.append(_np.mean(error_cumulative))
-                        error_cumulative = []
+                #     if len(error_cumulative) == 100:
+                #         self.error_mean.append(_np.mean(error_cumulative))
+                #         error_cumulative = []
 
-                    v_cumulative.append(v)
+                #     v_cumulative.append(v)
 
-                    if len(v_cumulative) == 100:
-                        self.v_mean.append(_np.mean(v_cumulative, axis=1))
-                        v_cumulative = []
+                #     if len(v_cumulative) == 100:
+                #         self.v_mean.append(_np.mean(v_cumulative, axis=1))
+                #         v_cumulative = []
 
-                    if len(self.p_cumulative) == 0 or not _np.array_equal(self.policy, self.p_cumulative[-1][1]):
-                        self.p_cumulative.append((n, self.policy.copy()))
-                    """
-                    Rewards,errors time at each iteration I think
-                    But that’s for all of them and steps per episode?
+                #     if len(self.p_cumulative) == 0 or not _np.array_equal(self.policy, self.p_cumulative[-1][1]):
+                #         self.p_cumulative.append((curr_itr, self.policy.copy()))
+                #     """
+                #     Rewards,errors time at each iteration I think
+                #     But that’s for all of them and steps per episode?
 
-                    Alpha decay and min ?
-                    And alpha and epsilon at each iteration?
-                    """
-                    self.run_stats.append(run_stats[-1])
-                    run_stats = []
+                #     Alpha decay and min ?
+                #     And alpha and epsilon at each iteration?
+                #     """
+                #     self.run_stats.append(run_stats[-1])
+                #     run_stats = []
 
                 if self.iter_callback is not None:
                     reset_s = self.iter_callback(s, a, s_new)
 
+                # Updating state, alpha, and epsilon
                 # current state is updated
                 s = s_new
 
@@ -1522,27 +1494,34 @@ class QLearningMod(MDP):
                 if epsilon < self.epsilon_min:
                     epsilon = self.epsilon_min
                 
-                # Terminate this Episode
-                if done_:
-                    print(f"Episode Terminated at {n} iterations")
+                # Completion - Checking if episode has terminated
+                if done:
                     break
 
-                n+=1
+                curr_itr+=1
 
             # Accumulate statistics at the end of the episode
-            if r == 1:
-                self.total_reward_earned +=1
+            end_time = _time.time()
+            stats = {
+            "reward" : reward,
+            "iter_in_episode" : curr_itr,
+            "alpha" : alpha,
+            "epsilon": epsilon,
+            "episode_time" : (end_time - start_time)
+            }
 
-        print(f"bruh we got the following rewards! {self.total_reward_earned}")
+            episode_stats.append(stats)
+
+        # print(f"bruh we got the following rewards! {self.total_reward_earned}")
         self._endRun()
         # add stragglers
-        if len(v_cumulative) > 0:
-            self.v_mean.append(_np.mean(v_cumulative, axis=1))
-        if len(error_cumulative) > 0:
-            self.error_mean.append(_np.mean(error_cumulative))
-        if self.run_stats is None or len(self.run_stats) == 0:
-            self.run_stats = run_stats
-        return self.run_stats
+        # if len(v_cumulative) > 0:
+        #     self.v_mean.append(_np.mean(v_cumulative, axis=1))
+        # if len(error_cumulative) > 0:
+        #     self.error_mean.append(_np.mean(error_cumulative))
+        # if self.run_stats is None or len(self.run_stats) == 0:
+        #     self.run_stats = run_stats
+        return episode_stats
 
     def _build_run_stat(self, i, a, error, p, r, s, v):
         run_stat = {
