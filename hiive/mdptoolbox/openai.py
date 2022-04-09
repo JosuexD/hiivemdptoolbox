@@ -28,7 +28,7 @@ class OpenAI_MDPToolbox:
         self.env.reset()
 
         if render:
-            self.env.render()
+            print(self.env.render("ansi"))
         
         self.transitions = self.env.P
         self.actions = int(re.findall(r'\d+', str(self.env.action_space))[0])

@@ -405,7 +405,7 @@ def small():
     R = _np.array([[5, 10], [-1, 2]])
     return P, R
 
-def openai(env_name:str, render:bool=False, **kwargs):
+def openai(env_name:str, render:bool=False, episode_max_iterations = 100, **kwargs):
     """
     Generate a MDPToolbox-formatted version of a *discrete* OpenAI Gym environment. 
 
@@ -462,4 +462,5 @@ def openai(env_name:str, render:bool=False, **kwargs):
     """
 
     env = openai_.OpenAI_MDPToolbox(env_name, render, **kwargs)
-    return env.P, env.R
+    env.env._max_episode_steps = episode_max_iterations
+    return env.P, env.R, env.env
