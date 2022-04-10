@@ -1414,6 +1414,7 @@ class QLearningMod(MDP):
             curr_itr = 0
             done = False
             start_time = _time.time()
+            accumulated_reward = 0
             while not done: 
                 # Action choice : greedy with increasing probability
                 # The agent takes random actions for probability ε and greedy action for probability (1-ε).
@@ -1454,6 +1455,7 @@ class QLearningMod(MDP):
                 self.S_freq[s,a] += 1
                 run_stats.append(self._build_run_stat(i=curr_itr, s=s, a=a, r=reward, p=p, v=v, error=error))
 
+                accumulated_reward += reward
                 # if take_run_stat:
                 #     error_cumulative.append(error)
 
@@ -1503,7 +1505,7 @@ class QLearningMod(MDP):
             # Accumulate statistics at the end of the episode
             end_time = _time.time()
             stats = {
-            "reward" : reward,
+            "reward" : accumulated_reward,
             "iter_in_episode" : curr_itr,
             "alpha" : alpha,
             "epsilon": epsilon,
